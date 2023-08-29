@@ -1,3 +1,14 @@
+config
+tools/*
+!tools/makefile
+!tools/config.tools
+app/*
+!app/*.c
+!app/makefile
+example/*/
+!example/model/
+!example/*/*.c
+
 # Prerequisites
 *.d
 

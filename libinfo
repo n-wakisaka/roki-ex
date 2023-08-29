@@ -1,0 +1,3 @@
+PROJNAME=roki-ex
+VERSION=1.0.0
+DEPENDENCY="zeda=1.8.0;zm=1.8.0;zeo=1.14.0;roki=2.4.0"
