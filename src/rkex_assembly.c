@@ -27,6 +27,7 @@ void rkAssemblyInit(rkAssembly *assembly)
   zNameSetPtr( assembly, NULL );
   zArrayInit( &assembly->parts );
   zArrayInit( &assembly->motors );
+  assembly->root = NULL;
 }
 
 void rkAssemblyDestroy(rkAssembly *assembly)
@@ -39,6 +40,47 @@ void rkAssemblyDestroy(rkAssembly *assembly)
     rkAssemblyPartDestroy( rkAssemblyGetPart(assembly,i) );
   zArrayFree( &assembly->parts );
   zArrayFree( &assembly->motors );
+}
+
+static char *_rkAssemblyPartAddPrefixToName(const char *name, const char *prefix, char *dest, size_t bufsize)
+{
+  zStrCopy( dest, prefix, bufsize );
+  zStrCat( dest, "_", bufsize );
+  zStrCat( dest, name, bufsize );
+  return dest;
+}
+
+void rkAssemblyPartChainAddPrefixToName(rkChain *chain, const char *prefix)
+{
+  int i;
+  char buf[BUFSIZ];
+  zMShape3D *ms;
+  rkMotorArray *ma;
+  rkMotor *m;
+
+
+  zNameSet( chain, _rkAssemblyPartAddPrefixToName( zName(chain), prefix, buf, BUFSIZ ) );
+
+  for( i=0; i<rkChainLinkNum(chain); i++ ){
+    zNameSet( rkChainLink(chain,i), _rkAssemblyPartAddPrefixToName( zName(rkChainLink(chain,i)), prefix, buf, BUFSIZ ) );
+    if( (m = rkJointGetMotor(rkChainLinkJoint(chain,i))) )
+      zNameSet( m, _rkAssemblyPartAddPrefixToName( zName(m), prefix, buf, BUFSIZ ) );
+  }
+  
+  ms = rkChainShape(chain);
+  if( ms ){
+    for( i=0; i<zMShape3DShapeNum(ms); i++ )
+      zNameSet( zMShape3DShape(ms,i), _rkAssemblyPartAddPrefixToName( zName(zMShape3DShape(ms,i)), prefix, buf, BUFSIZ ) );
+    for( i=0; i<zMShape3DOpticNum(ms); i++ )
+      zNameSet( zMShape3DOptic(ms,i), _rkAssemblyPartAddPrefixToName( zName(zMShape3DOptic(ms,i)), prefix, buf, BUFSIZ ) );
+    for( i=0; i<zMShape3DTextureNum(ms); i++ )
+      zNameSet( zMShape3DTexture(ms,i), _rkAssemblyPartAddPrefixToName( zName(zMShape3DTexture(ms,i)), prefix, buf, BUFSIZ ) );
+  }
+
+  ma = rkChainMotor(chain);
+  if( ma )
+    for( i=0; i<zArraySize(ma); i++ )
+      zNameSet( zArrayElemNC(ma,i), _rkAssemblyPartAddPrefixToName( zName(zArrayElemNC(ma,i)), prefix, buf, BUFSIZ ) );
 }
 
 rkChain *rkAssemblyCreateChain(rkChain *chain)
@@ -121,6 +163,7 @@ static void *_rkAssemblyPartChainFileFromZTK(void *obj, int i, void *arg, ZTK *z
     ZRUNWARN( "cannot open chain file" );
     return NULL;
   }
+  rkAssemblyPartChainAddPrefixToName( rkAssemblyPartChain(part), zName(part) );
   return part;
 }
 
@@ -155,64 +198,55 @@ static void _rkAssemblyPartAttFPrintZTK(FILE *fp, int i, void *obj){
 }
 
 static void *_rkAssemblyPartParentFromZTK(void *obj, int i, void *arg, ZTK *ztk){
-  _rkAssemblyPartRefPrp *prp;
-  rkAssemblyPart *part;
-  rkAssemblyPart *parent;
-
-  part = (rkAssemblyPart*)obj;
-  prp = (_rkAssemblyPartRefPrp*)arg;
-
-  zArrayFindName( prp->parray, ZTKVal(ztk), parent );
-  if( !parent ){
-    ZRUNERROR( "%s: unknown part", ZTKVal(ztk) );
-    return NULL;
-  }
-  part->parent = parent;
-
-  return part;
+  ((rkAssemblyPart*)obj)->parent = zStrClone( ZTKVal(ztk) );
+  return obj;
 }
 
 static void _rkAssemblyPartParentFPrintZTK(FILE *fp, int i, void *obj){
-  fprintf( fp, "%s\n",  zName(rkAssemblyPartParent((rkAssemblyPart *)obj)) );
+  char *name = rkAssemblyPartParent((rkAssemblyPart *)obj);
+  if( name )
+    fprintf( fp, "%s\n",  name );
 }
 
 static void *_rkAssemblyPartParentLinkFromZTK(void *obj, int i, void *arg, ZTK *ztk){
-  rkAssemblyPart *part;
-
-  part = (rkAssemblyPart*)obj;
-  part->parent_link = rkChainFindLink( rkAssemblyPartChain(rkAssemblyPartParent(part)), ZTKVal(ztk) );
-
-  return part->parent_link ? part : NULL;
+  ((rkAssemblyPart*)obj)->parent_link = zStrClone( ZTKVal(ztk) );
+  return obj;
 }
 
 static void _rkAssemblyPartParentLinkFPrintZTK(FILE *fp, int i, void *obj){
-  fprintf( fp, "%s\n",  zName(rkAssemblyPartParentLink((rkAssemblyPart *)obj)) );
+  char *name = rkAssemblyPartParentLink((rkAssemblyPart *)obj);
+  if( name )
+    fprintf( fp, "%s\n",  name );
 }
 
 static ZTKPrp __ztk_prp_rkassemblypart[] = {
   { "name", 1, _rkAssemblyPartNameFromZTK, _rkAssemblyPartNameFPrintZTK },
   { "chainfile", 1, _rkAssemblyPartChainFileFromZTK, _rkAssemblyPartChainFileFPrintZTK },
+  { "parent", 1, _rkAssemblyPartParentFromZTK, _rkAssemblyPartParentFPrintZTK },
+  { "parentlink", 1, _rkAssemblyPartParentLinkFromZTK, _rkAssemblyPartParentLinkFPrintZTK },
   { "jointtype", 1, _rkAssemblyPartJointTypeFromZTK, _rkAssemblyPartJointTypeFPrintZTK },
   { "pos", 1, _rkAssemblyPartPosFromZTK, _rkAssemblyPartPosFPrintZTK },
   { "att", 1, _rkAssemblyPartAttFromZTK, _rkAssemblyPartAttFPrintZTK },
 };
 
-static ZTKPrp __ztk_prp_rkassemblypart_parent[] = {
-  { "parent", 1, _rkAssemblyPartParentFromZTK, _rkAssemblyPartParentFPrintZTK },
-  { "parentlink", 1, _rkAssemblyPartParentLinkFromZTK, _rkAssemblyPartParentLinkFPrintZTK },
-};
-
 static void *_rkAssemblyPartFromZTK(void *obj, int i, void *arg, ZTK *ztk){
   _rkAssemblyPartRefPrp *prp;
+  rkAssembly *assembly;
   rkAssemblyPart *part;
 
-  part = rkAssemblyGetPart((rkAssembly*)obj,i);
+  assembly = (rkAssembly*)obj;
+  part = rkAssemblyGetPart(assembly,i);
   prp = (_rkAssemblyPartRefPrp*)arg;
 
   rkAssemblyPartInit( part );
   if( !ZTKEvalKey( part, prp, ztk, __ztk_prp_rkassemblypart ) ) return NULL;
   if( !rkAssemblyPartJoint(part)->com ) rkJointAssign( rkAssemblyPartJoint(part), &rk_joint_fixed );
   rkJointFromZTK( rkAssemblyPartJoint(part), prp->marray, ztk );
+
+  if( !part->parent || !part->parent_link ){
+    if( assembly->root ) return NULL;
+    assembly->root = part;
+  }
   
   return part;
 }
@@ -224,28 +258,11 @@ void _rkAssemblyPartFPrintZTK(FILE *fp, int i, void *obj)
   part = rkAssemblyGetPart((rkAssembly *)obj,i);
   ZTKPrpKeyFPrint( fp, part, __ztk_prp_rkassemblypart );
   rkJointFPrintZTK( fp, rkAssemblyPartJoint(part), zName(part) );
-  if( part->parent )
-    ZTKPrpKeyFPrint( fp, part, __ztk_prp_rkassemblypart_parent );
   fprintf( fp, "\n" );
 }
 
 static ZTKPrp __ztk_prp_tag_rkassembly_part[] = {
   { ZTK_TAG_RKEX_ASSEMBLY_PART, -1, _rkAssemblyPartFromZTK, _rkAssemblyPartFPrintZTK },
-};
-
-static void *_rkAssemblyConnectFromZTK(void *obj, int i, void *arg, ZTK *ztk){
-  rkAssemblyPart *part;
-  _rkAssemblyPartRefPrp *prp;
-
-  part = rkAssemblyGetPart((rkAssembly*)obj,i);
-  prp = (_rkAssemblyPartRefPrp*)arg;
-
-  if( !ZTKEvalKey( part, prp, ztk, __ztk_prp_rkassemblypart_parent ) ) return NULL;
-  return part;
-}
-
-static ZTKPrp __ztk_prp_tag_rkassembly_connection[] = {
-  { ZTK_TAG_RKEX_ASSEMBLY_PART, -1, _rkAssemblyConnectFromZTK, NULL },
 };
 
 /* public functions */
@@ -269,7 +286,6 @@ rkAssembly *rkAssemblyFromZTK(rkAssembly *assembly, ZTK *ztk, const char *dirpat
 
   ZTKEvalTag( assembly, NULL, ztk, __ztk_prp_tag_rkassembly_motor );
   ZTKEvalTag( assembly, &prp, ztk, __ztk_prp_tag_rkassembly_part);
-  ZTKEvalTag( assembly, &prp, ztk, __ztk_prp_tag_rkassembly_connection );
   ZTKEvalTag( assembly, NULL, ztk, __ztk_prp_tag_rkassembly );
 
   return assembly;

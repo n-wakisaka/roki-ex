@@ -15,8 +15,8 @@ ZDEF_STRUCT( __ROKI_EX_CLASS_EXPORT, rkAssemblyPart ) {
   rkJoint joint;
   zFrame3D frame;
 
-  rkAssemblyPart *parent;
-  rkLink *parent_link;
+  char *parent;
+  char *parent_link;
 };
 
 #define rkAssemblyPartChainFile(p) ( (p)->chain_file ? (p)->chain_file : (char *)"nofile" )
@@ -31,6 +31,8 @@ ZDEF_STRUCT( __ROKI_EX_CLASS_EXPORT, rkAssemblyPart ) {
 __ROKI_EX_EXPORT void rkAssemblyPartInit(rkAssemblyPart *part);
 __ROKI_EX_EXPORT void rkAssemblyPartDestroy(rkAssemblyPart *part);
 
+__ROKI_EX_EXPORT void rkAssemblyPartChainAddPrefixToName(rkChain *chain, const char* prefix);
+
 
 zArrayClass( rkAssemblyPartArray, rkAssemblyPart );
 
@@ -38,6 +40,7 @@ ZDEF_STRUCT( __ROKI_EX_CLASS_EXPORT, rkAssembly) {
   Z_NAMED_CLASS;
   rkAssemblyPartArray parts;
   rkMotorArray motors;
+  rkAssemblyPart *root;
 };
 
 #define rkAssemblyParts(a) ( &(a)->parts )

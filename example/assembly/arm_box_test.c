@@ -8,6 +8,8 @@ int main(int argc, char *argv[])
   rkAssemblyReadZTK( &assembly, "../model/arm_box.ztk" );
   rkAssemblyFPrintZTK( stdout, &assembly );
 
+  rkChainFPrintZTK( stdout, rkAssemblyPartChain(rkAssemblyGetPart(&assembly,0)) );
+
   eprintf("destroy\n");
   rkAssemblyDestroy( &assembly );
   
