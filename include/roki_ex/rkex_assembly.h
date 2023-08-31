@@ -29,7 +29,7 @@ ZDEF_STRUCT( __ROKI_EX_CLASS_EXPORT, rkAssemblyPart ) {
 #define rkAssemblyPartParentLink(p) ( (p)->parent_link )
 
 __ROKI_EX_EXPORT void rkAssemblyPartInit(rkAssemblyPart *part);
-__ROKI_EX_EXPORT void rkAssemblyPartInit(rkAssemblyPart *part);
+__ROKI_EX_EXPORT void rkAssemblyPartDestroy(rkAssemblyPart *part);
 
 
 zArrayClass( rkAssemblyPartArray, rkAssemblyPart );

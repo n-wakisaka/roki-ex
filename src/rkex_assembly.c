@@ -13,13 +13,6 @@ void rkAssemblyPartInit(rkAssemblyPart *part)
   part->parent_link = NULL;
 }
 
-void rkAssemblyInit(rkAssembly *assembly)
-{
-  zNameSetPtr( assembly, NULL );
-  zArrayInit( &assembly->parts );
-  zArrayInit( &assembly->motors );
-}
-
 void rkAssemblyPartDestroy(rkAssemblyPart *part)
 {
   if( !part ) return;
@@ -27,6 +20,13 @@ void rkAssemblyPartDestroy(rkAssemblyPart *part)
   zFree( part->chain_file );
   rkChainDestroy( &part->chain );
   rkJointDestroy( &part->joint );
+}
+
+void rkAssemblyInit(rkAssembly *assembly)
+{
+  zNameSetPtr( assembly, NULL );
+  zArrayInit( &assembly->parts );
+  zArrayInit( &assembly->motors );
 }
 
 void rkAssemblyDestroy(rkAssembly *assembly)
