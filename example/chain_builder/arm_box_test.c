@@ -2,7 +2,14 @@
 
 int main(int argc, char *argv[])
 {
-  rkChainBuilder builder;
+  rkAssembly assembly;
+
+  eprintf("read\n");
+  rkAssemblyReadZTK( &assembly, "../model/arm_box.ztk" );
+  rkAssemblyFPrintZTK( stdout, &assembly );
+
+  eprintf("destroy\n");
+  rkAssemblyDestroy( &assembly );
   
   return 0;
 }
