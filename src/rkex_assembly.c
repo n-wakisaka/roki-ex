@@ -224,7 +224,8 @@ void _rkAssemblyPartFPrintZTK(FILE *fp, int i, void *obj)
   part = rkAssemblyGetPart((rkAssembly *)obj,i);
   ZTKPrpKeyFPrint( fp, part, __ztk_prp_rkassemblypart );
   rkJointFPrintZTK( fp, rkAssemblyPartJoint(part), zName(part) );
-  ZTKPrpKeyFPrint( fp, part, __ztk_prp_rkassemblypart_parent );
+  if( part->parent )
+    ZTKPrpKeyFPrint( fp, part, __ztk_prp_rkassemblypart_parent );
   fprintf( fp, "\n" );
 }
 
