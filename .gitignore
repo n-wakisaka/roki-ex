@@ -6,6 +6,9 @@ app/*
 !app/*.c
 !app/makefile
 
+# vscode
+.vscode/
+
 # Prerequisites
 *.d
 
