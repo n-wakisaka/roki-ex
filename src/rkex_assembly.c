@@ -25,9 +25,182 @@ void rkAssemblyDestroy(rkAssembly *assembly)
   zArrayFree( &assembly->motors );
 }
 
-rkChain *rkAssemblyCreateChain(rkChain *chain)
+static rkChain *_rkAssemblyChainAlloc(rkAssembly *assembly, rkChain *chain)
+{
+  int i, num_link, num_shape, num_optic, num_texture, num_motor;
+  rkChain *c;
+  zMShape3D *ms;
+  rkMotorArray *marray;
+
+  /* count */
+  num_link = 0;
+  num_shape = 0;
+  num_optic = 0;
+  num_texture = 0;
+  num_motor = rkAssemblyMotorNum(assembly);
+  for( i=0; i<rkAssemblyPartNum(assembly); i++ ){
+    c = rkAssemblyPartChain(rkAssemblyGetPart(assembly,i));
+    num_link += rkChainLinkNum(c);
+    if( (ms = rkChainShape(c)) ){
+      num_shape += zMShape3DShapeNum(ms);
+      num_optic += zMShape3DOpticNum(ms);
+      num_texture += zMShape3DTextureNum(ms);
+    }
+    if( (marray = rkChainMotor(c)) )
+      num_motor += zArraySize(marray);
+  }
+
+  /* alloc */
+  zArrayAlloc( rkChainLinkArray(chain), rkLink, num_link );
+  if( rkChainLinkNum(chain) != num_link ) return NULL;
+  if( rkChainLinkNum(chain) == 0 ){
+    ZRUNWARN( RK_WARN_CHAIN_EMPTY );
+    return NULL;
+  }
+  if( num_shape > 0){
+    if( !( rkChainShape(chain) = zAlloc( zMShape3D, 1 ) ) ){
+      ZALLOCERROR();
+      return NULL;
+    }
+    ms = rkChainShape(chain);
+    zMShape3DInit( ms );
+    zArrayAlloc( &ms->shape, zShape3D, num_shape );
+    zArrayAlloc( &ms->optic, zOpticalInfo, num_optic );
+    zArrayAlloc( &ms->texture, zTexture, num_texture );
+  }
+  if( num_motor > 0 ){
+    if( !( rkChainMotor(chain) = zAlloc( rkMotorArray, 1 ) ) ){
+      ZALLOCERROR();
+      return NULL;
+    }
+    marray = rkChainMotor(chain);
+    zArrayInit( marray );
+    zArrayAlloc( marray, rkMotor, num_motor );
+    if( zArraySize(marray) != num_motor ) return NULL;
+  }
+
+  return chain;
+}
+
+static rkBody *_rkAssemblyChainCloneBody(rkBody *org, rkBody *cln, zShape3D *so, zShape3D *sc)
+{
+  zShapeListCell *sp;
+
+  rkMPCopy( &org->mp, &cln->mp );
+  zListInit( rkBodyExtWrench(cln) );
+  zListInit( rkBodyShapeList(cln) );
+  zListForEach( rkBodyShapeList(org), sp )
+    if( !rkBodyShapePush( cln, sp->data - so + sc ) ) return NULL;
+  if( rkBodyStuff(org) && !rkBodySetStuff( cln, rkBodyStuff(org) ) ){
+    ZALLOCERROR();
+    return NULL;
+  }
+  return cln;
+}
+
+static rkLink *_rkAssemblyChainCloneLink(rkLink *org, rkLink *cln, zShape3D *so, zShape3D *sc)
+{
+  if( !zNameSet( cln, zName(org) ) ||
+      !rkJointClone( rkLinkJoint(org), rkLinkJoint(cln) ) ||
+      !_rkAssemblyChainCloneBody( rkLinkBody(org), rkLinkBody(cln), so, sc ) ){
+    ZALLOCERROR();
+    return NULL;
+  }
+  rkMPCopy( rkLinkCRB(org), rkLinkCRB(cln) );
+  rkLinkSetOrgFrame( cln, rkLinkOrgFrame(org) );
+
+  rkLinkSetParent( cln,
+    rkLinkParent(org) ? rkLinkParent(org) - org + cln : NULL );
+  rkLinkSetChild( cln,
+    rkLinkChild(org) ? rkLinkChild(org) - org + cln : NULL );
+  rkLinkSetSibl( cln,
+    rkLinkSibl(org) ? rkLinkSibl(org) - org + cln : NULL );
+  return cln;
+}
+
+static zShape3D *_rkAssemblyChainCloneShape3D(zShape3D *org, zShape3D *cln, zOpticalInfo *oi, zTexture *ot)
+{
+  if( !zNameSet( cln, zName(org) ) ){
+    ZALLOCERROR();
+    return NULL;
+  }
+  if( !( cln->body = ( cln->com = org->com )->_clone( org->body ) ) )
+    return NULL;
+  zShape3DSetOptic( cln, oi );
+  zShape3DSetTexture( cln, ot );
+  return cln;
+}
+
+static rkChain *_rkAssemblyChainClone(rkAssembly *assembly, rkChain *chain)
+{
+  int i, j, num_link, num_shape, num_optic, num_texture, num_motor;
+  rkChain *c;
+  zMShape3D *mshape, *ms;
+  rkMotorArray *marray;
+
+  /* assembly motor */
+  for( i=0; i<rkAssemblyMotorNum(assembly); i++ )
+    if( !rkMotorClone( rkAssemblyGetMotor(assembly,i), zArrayElemNC(rkChainMotor(chain),i) ) )
+      return NULL;
+
+  /* assembly parts */
+  num_link = 0;
+  num_shape = 0;
+  num_optic = 0;
+  num_texture = 0;
+  num_motor = rkAssemblyMotorNum(assembly);
+  mshape = rkChainShape(chain);
+  for( i=0; i<rkAssemblyPartNum(assembly); i++ ){
+    c = rkAssemblyPartChain(rkAssemblyGetPart(assembly,i));
+    ms = rkChainShape(c);
+    marray = rkChainMotor(c);
+
+    /* link */
+    for( j=0; j<rkChainLinkNum(c); j++ ){
+      if( !_rkAssemblyChainCloneLink( rkChainLink(c,j), rkChainLink(chain,num_link+j),
+          zMShape3DShapeBuf(ms), zMShape3DShapeBuf(mshape)+num_shape ) )
+        return NULL;
+    }
+    num_link += rkChainLinkNum(c);
+
+    /* mshape */
+    if( ms ){
+      for( j=0; j<zMShape3DOpticNum(ms); j++ )
+        if( !zOpticalInfoClone( zMShape3DOptic(ms,j), zMShape3DOptic(mshape,num_optic+j) ) )
+          return NULL;
+      for( j=0; j<zMShape3DTextureNum(ms); j++ )
+        if( !zTextureClone( zMShape3DTexture(ms,j), zMShape3DTexture(mshape,num_texture+j) ) )
+          return NULL;
+      for( j=0; j<zMShape3DShapeNum(ms); j++ )
+        if( !_rkAssemblyChainCloneShape3D( zMShape3DShape(ms,j), zMShape3DShape(mshape,num_shape+j),
+              zMShape3DOptic( mshape, num_optic+zShape3DOptic(zMShape3DShape(ms,j)) - zMShape3DOpticBuf(ms) ),
+              zMShape3DTexture( mshape, num_texture+zShape3DTexture(zMShape3DShape(ms,j)) - zMShape3DTextureBuf(ms) ) ) )
+          return NULL;
+      num_optic += zMShape3DOpticNum(ms);
+      num_texture += zMShape3DTextureNum(ms);
+      num_shape += zMShape3DShapeNum(ms);
+    }
+
+    /* motor */
+    if( marray ){
+      for( j=0; j<zArraySize(marray); j++ )
+        if( !rkMotorClone( zArrayElemNC(marray,j), zArrayElemNC(rkChainMotor(chain),num_motor+j) ) )
+          return NULL;
+      num_motor += zArraySize(marray);
+    }
+  }
+
+  return chain;
+}
+
+rkChain *rkAssemblyCreateChain(rkAssembly *assembly, rkChain *chain)
 {
   rkChainInit( chain );
+  if( !zNameSet( chain, zName(assembly) ) ) return NULL;
+  if( !_rkAssemblyChainAlloc( assembly, chain ) ||
+      !_rkAssemblyChainClone( assembly, chain ) )
+      return NULL;
+
   return chain;
 }
 

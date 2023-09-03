@@ -28,7 +28,7 @@ ZDEF_STRUCT( __ROKI_EX_CLASS_EXPORT, rkAssembly) {
 __ROKI_EX_EXPORT void rkAssemblyInit(rkAssembly *assembly);
 __ROKI_EX_EXPORT void rkAssemblyDestroy(rkAssembly *assembly);
 
-__ROKI_EX_EXPORT rkChain *rkAssemblyCreateChain(rkChain *chain);
+__ROKI_EX_EXPORT rkChain *rkAssemblyCreateChain(rkAssembly *assembly, rkChain *chain);
 
 
 #define ZTK_TAG_RKEX_ASSEMBLY "assembly"
