@@ -25,10 +25,12 @@ zArrayClass( rkAssemblyJointArray, rkAssemblyJoint );
 #define rkAssemblyJointFrame(j) ( &(j)->frame )
 #define rkAssemblyJointParent(j) ( (j)->parent )
 #define rkAssemblyJointParentLink(j) ( (j)->parent_link )
+#define rkAssemblyJointParentFrame(j) ( &(j)->parent_frame )
 #define rkAssemblyJointParentPos(j) ( zFrame3DPos(&(j)->parent_frame) )
 #define rkAssemblyJointParentAtt(j) ( zFrame3DAtt(&(j)->parent_frame) )
 #define rkAssemblyJointChild(j) ( (j)->child )
 #define rkAssemblyJointChildLink(j) ( (j)->child_link )
+#define rkAssemblyJointChildFrame(j) ( &(j)->child_frame )
 #define rkAssemblyJointChildPos(j) ( zFrame3DPos(&(j)->child_frame) )
 #define rkAssemblyJointChildAtt(j) ( zFrame3DAtt(&(j)->child_frame) )
 

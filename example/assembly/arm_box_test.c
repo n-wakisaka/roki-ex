@@ -12,6 +12,7 @@ int main(int argc, char *argv[])
   eprintf("chain\n");
   rkAssemblyCreateChain( &assembly, &chain );
   rkChainFPrintZTK( stdout, &chain );
+  rkChainWriteZTK( &chain, "arm_box_chain.ztk" );
 
   eprintf("destroy\n");
   rkChainDestroy( &chain );

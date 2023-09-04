@@ -193,13 +193,74 @@ static rkChain *_rkAssemblyChainClone(rkAssembly *assembly, rkChain *chain)
   return chain;
 }
 
+rkLink *_rkAssemblyLinkPurgeFromParentChildren(rkLink *link)
+{
+  rkLink *parent, *child;
+
+  if( !link || !( parent = rkLinkParent(link) ) ) return link;  
+  if( ( child = rkLinkChild(parent) ) == link ){
+    rkLinkChild(parent) = rkLinkSibl(link);
+    return link;
+  }
+  if( !child || !rkLinkSibl(child) ) return NULL; /* link does not exist in parent children */
+  for( ; rkLinkSibl(child); child=rkLinkSibl(child) )
+    if( rkLinkSibl(child) == link ){
+      rkLinkSibl(child) = rkLinkSibl(link);
+      return link;
+    }
+  
+  return NULL;
+}
+
+rkLink *_rkAssemblyLinkChangeRoot(rkLink *link, rkLink *new_parent, rkJoint *new_joint, zFrame3D* orgframe)
+{
+  rkLink *l, *parent;
+
+  if( ( parent = rkLinkParent(link) ) ){
+    _rkAssemblyLinkChangeRoot( parent, link, rkLinkJoint(link), rkLinkOrgFrame(link) );
+    _rkAssemblyLinkPurgeFromParentChildren( link );
+    rkLinkAddChild( link, parent );
+  }
+  for( l=rkLinkChild(link); l; l=rkLinkSibl(l) )
+    zFrame3DXform( orgframe, rkLinkOrgFrame(l), rkLinkOrgFrame(l) );
+  
+  rkLinkSetParent( link, new_parent );
+  rkJointDestroy( rkLinkJoint(link) );
+  rkJointClone( new_joint, rkLinkJoint(link) );
+
+  return link;
+}
+
+rkChain *_rkAssemblyChainConnection(rkAssembly *assembly, rkChain *chain)
+{
+  int i;
+  rkAssemblyJoint *aj;
+  rkLink *parent, *child;
+  char name[BUFSIZ];
+
+  for( i=0; i<rkAssemblyJointNum(assembly); i++ ){
+    aj = rkAssemblyGetJoint(assembly,i);
+    rkAssemblyPartAddPrefixToName( rkAssemblyJointParentLink(aj), rkAssemblyJointParent(aj), name, BUFSIZ );
+    if( !( parent = rkChainFindLink( chain, name ) ) ) return NULL;
+    rkAssemblyPartAddPrefixToName( rkAssemblyJointChildLink(aj), rkAssemblyJointChild(aj), name, BUFSIZ );
+    if( !( child = rkChainFindLink( chain, name ) ) ) return NULL;
+
+    _rkAssemblyLinkChangeRoot( child, parent, rkAssemblyJointJoint(aj), rkAssemblyJointChildFrame(aj) );
+    rkLinkSetOrgFrame( child, rkAssemblyJointParentFrame(aj) );
+  }
+
+  return chain;
+}
+
 rkChain *rkAssemblyCreateChain(rkAssembly *assembly, rkChain *chain)
 {
   rkChainInit( chain );
   if( !zNameSet( chain, zName(assembly) ) ) return NULL;
   if( !_rkAssemblyChainAlloc( assembly, chain ) ||
-      !_rkAssemblyChainClone( assembly, chain ) )
-      return NULL;
+      !_rkAssemblyChainClone( assembly, chain ) ||
+      !_rkAssemblyChainConnection( assembly, chain ))
+    return NULL;
+  rkChainSetJointIDOffset( chain );
 
   return chain;
 }
